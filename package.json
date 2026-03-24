@@ -4,34 +4,27 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build",
-    "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "dev:api": "tsx server.ts",
+    "dev:web": "npm --prefix frontend run dev",
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "drizzle-kit push --config drizzle.config.ts",
     "db:studio": "drizzle-kit studio --config drizzle.config.ts",
-    "lint": "tsc --noEmit"
+    "lint:api": "tsc --noEmit",
+    "lint:web": "npm --prefix frontend run lint",
+    "lint": "npm run lint:api && npm run lint:web"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react": "^5.0.4",
     "bcryptjs": "^3.0.3",
-    "clsx": "^2.1.1",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.3",
-    "lucide-react": "^0.546.0",
-    "motion": "^12.23.24",
     "natural": "^8.1.1",
-    "pg": "^8.20.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-markdown": "^10.1.0",
-    "tailwind-merge": "^3.5.0",
-    "vite": "^6.2.0"
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -39,11 +32,9 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.14.0",
     "@types/pg": "^8.20.0",
-    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
     "drizzle-kit": "^0.31.10",
-    "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "tsx": "^4.21.0"
   }
 }

@@ -1,0 +1,5 @@
+{
+  "name": "ShieldBot",
+  "description": "A safety-aware AI chatbot platform for children/teens, with parental supervision, risk classification, admin controls, and account management.",
+  "requestFramePermissions": ["microphone"]
+}

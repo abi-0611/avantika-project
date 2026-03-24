@@ -10,8 +10,30 @@ const router = Router();
 router.get('/', requireAuth, async (req: AuthRequest, res, next) => {
   try {
     const guardianUid = req.user!.uid;
-    const rows = await db.select().from(supervision).where(eq(supervision.guardianUid, guardianUid));
-    res.json(rows);
+    const rows = await db
+      .select({
+        id: supervision.id,
+        guardianUid: supervision.guardianUid,
+        childUid: supervision.childUid,
+        childEmail: supervision.childEmail,
+        status: supervision.status,
+        childDisplayName: users.displayName,
+        childUserEmail: users.email,
+      })
+      .from(supervision)
+      .leftJoin(users, eq(supervision.childUid, users.uid))
+      .where(eq(supervision.guardianUid, guardianUid));
+
+    res.json(
+      rows.map((r) => ({
+        id: r.id,
+        guardianUid: r.guardianUid,
+        childUid: r.childUid,
+        childEmail: r.childUserEmail ?? r.childEmail,
+        status: r.status,
+        childDisplayName: r.childDisplayName ?? null,
+      }))
+    );
   } catch (err) {
     next(err);
   }

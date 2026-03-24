@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import cors from "cors";
+import fs from 'fs';
 
 import authRoutes from "./src/routes/auth";
 import chatRoutes from "./src/routes/chats";
@@ -16,8 +16,6 @@ import memoryRoutes from "./src/routes/memory";
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT ?? 3000);
-  const hmrEnabled = process.env.DISABLE_HMR !== 'true';
-  const HMR_PORT = Number(process.env.VITE_HMR_PORT ?? (PORT + 1));
 
   app.use(cors());
   app.use(express.json({ limit: '15mb' }));
@@ -47,22 +45,16 @@ async function startServer() {
     res.status(500).json({ error: err?.message || 'Internal server error' });
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: hmrEnabled ? { port: HMR_PORT, clientPort: HMR_PORT } : false,
-      },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+  // Serve built frontend in production (optional)
+  if (process.env.NODE_ENV === 'production') {
+    const distPath = path.join(process.cwd(), 'frontend', 'dist');
+    const indexPath = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(indexPath);
+      });
+    }
   }
 
   app.listen(PORT, "0.0.0.0", () => {
