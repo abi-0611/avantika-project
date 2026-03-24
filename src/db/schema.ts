@@ -14,9 +14,18 @@ export const users = pgTable('users', {
   createdAt: bigint('created_at', { mode:'number' }).notNull(),
 });
 
+export const conversations = pgTable('conversations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  uid: text('uid').notNull().references(() => users.uid, { onDelete: 'cascade' }),
+  title: text('title'),
+  createdAt: bigint('created_at', { mode: 'number' }).notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
+
 export const chats = pgTable('chats', {
   id: serial('id').primaryKey(),
   uid: text('uid').notNull().references(()=>users.uid, {onDelete:'cascade'}),
+  conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
   text: text('text').notNull(),
   sender: text('sender').notNull(), // 'user' | 'bot'
   timestamp: bigint('timestamp', { mode:'number' }).notNull(),

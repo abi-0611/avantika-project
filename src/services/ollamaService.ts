@@ -16,29 +16,54 @@ export interface SafetyResult {
 }
 
 const memoryStore = new Map<string, ConversationMemory>();
+const defaultMemoryEnabled = new Map<string, boolean>();
 
-export function getMemory(uid: string): ConversationMemory {
-  if (!memoryStore.has(uid)) memoryStore.set(uid, { messages: [], enabled: false });
-  return memoryStore.get(uid)!;
+function memoryKey(uid: string, conversationId?: string) {
+  return `${uid}:${conversationId || 'default'}`;
 }
 
-export function toggleUserMemory(uid: string, enabled: boolean) {
-  const mem = getMemory(uid);
+function getDefaultMemoryEnabled(uid: string) {
+  return defaultMemoryEnabled.get(uid) ?? false;
+}
+
+function setDefaultMemoryEnabled(uid: string, enabled: boolean) {
+  defaultMemoryEnabled.set(uid, enabled);
+}
+
+export function getMemory(uid: string, conversationId?: string): ConversationMemory {
+  const key = memoryKey(uid, conversationId);
+  if (!memoryStore.has(key)) memoryStore.set(key, { messages: [], enabled: getDefaultMemoryEnabled(uid) });
+  return memoryStore.get(key)!;
+}
+
+export function toggleUserMemory(uid: string, enabled: boolean, conversationId?: string) {
+  if (!conversationId) {
+    // Treat as a global default, and apply to any existing conversations in memory.
+    setDefaultMemoryEnabled(uid, enabled);
+    for (const [key, mem] of memoryStore.entries()) {
+      if (!key.startsWith(`${uid}:`)) continue;
+      mem.enabled = enabled;
+      if (!enabled) mem.messages = [];
+    }
+    return;
+  }
+
+  const mem = getMemory(uid, conversationId);
   mem.enabled = enabled;
   if (!enabled) mem.messages = [];
 }
 
-export function clearUserMemory(uid: string) {
-  const mem = getMemory(uid);
+export function clearUserMemory(uid: string, conversationId?: string) {
+  const mem = getMemory(uid, conversationId);
   mem.messages = [];
 }
 
-export function isMemoryEnabled(uid: string): boolean {
-  return getMemory(uid).enabled;
+export function isMemoryEnabled(uid: string, conversationId?: string): boolean {
+  return getMemory(uid, conversationId).enabled;
 }
 
-function addToMemory(uid: string, role: 'user' | 'assistant', content: string) {
-  const mem = getMemory(uid);
+function addToMemory(uid: string, role: 'user' | 'assistant', content: string, conversationId?: string) {
+  const mem = getMemory(uid, conversationId);
   const max = parseInt(process.env.MEMORY_MAX_MESSAGES || '20', 10);
   mem.messages.push({ role, content });
   if (mem.messages.length > max) mem.messages = mem.messages.slice(-max);
@@ -146,6 +171,7 @@ async function callOllamaGenerate(body: any) {
 export async function classifyRisk(
   text: string,
   uid?: string,
+  conversationId?: string,
   rules?: Array<{ keyword: string; category: string; riskLevel: string }>,
   childSettings?: { blockedKeywords?: string[] | null; blockedTopics?: string[] | null } | null,
 ): Promise<SafetyResult> {
@@ -164,7 +190,7 @@ export async function classifyRisk(
   }
 
   // 3. Build prompt with optional memory history
-  const mem = uid ? getMemory(uid) : { messages: [], enabled: false };
+  const mem = uid ? getMemory(uid, conversationId) : { messages: [], enabled: false };
   const history =
     mem.enabled && mem.messages.length > 0
       ? mem.messages.map((m) => `${m.role}: ${m.content}`).join('\n')
@@ -194,8 +220,8 @@ export async function classifyRisk(
 
   // 5. Store in memory if enabled
   if (uid && mem.enabled) {
-    addToMemory(uid, 'user', text);
-    addToMemory(uid, 'assistant', result.suggestedResponse);
+    addToMemory(uid, 'user', text, conversationId);
+    addToMemory(uid, 'assistant', result.suggestedResponse, conversationId);
   }
 
   return result;
@@ -204,6 +230,7 @@ export async function classifyRisk(
 export async function classifyImageRisk(
   base64Image: string,
   uid?: string,
+  conversationId?: string,
   text?: string,
   childSettings?: { blockedKeywords?: string[] | null; blockedTopics?: string[] | null } | null,
 ): Promise<SafetyResult> {
@@ -216,7 +243,7 @@ export async function classifyImageRisk(
     }
   }
 
-  const mem = uid ? getMemory(uid) : { messages: [], enabled: false };
+  const mem = uid ? getMemory(uid, conversationId) : { messages: [], enabled: false };
   const history =
     mem.enabled && mem.messages.length > 0
       ? mem.messages.map((m) => `${m.role}: ${m.content}`).join('\n')
@@ -247,8 +274,8 @@ export async function classifyImageRisk(
   };
 
   if (uid && mem.enabled) {
-    addToMemory(uid, 'user', messageText || '[image]');
-    addToMemory(uid, 'assistant', result.suggestedResponse);
+    addToMemory(uid, 'user', messageText || '[image]', conversationId);
+    addToMemory(uid, 'assistant', result.suggestedResponse, conversationId);
   }
 
   return result;

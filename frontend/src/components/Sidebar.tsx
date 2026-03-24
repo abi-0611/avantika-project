@@ -1,12 +1,31 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Shield, MessageSquare, Home, Settings, Users, ShieldAlert, PlusCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
+import { apiClient } from '../services/apiClient';
+
+type ConversationListItem = {
+  id: string;
+  title: string | null;
+  createdAt: number;
+  updatedAt: number;
+  lastMessageText?: string | null;
+  lastMessageTimestamp?: number | null;
+};
 
 export default function Sidebar() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
+
+  const activeConversationId = useMemo(() => {
+    const sp = new URLSearchParams(location.search);
+    return sp.get('c');
+  }, [location.search]);
 
   const navItems = [
     { to: '/', icon: Home, label: 'Home' },
@@ -14,6 +33,37 @@ export default function Sidebar() {
     ...(user?.role === 'parent' || user?.role === 'admin' ? [{ to: '/parental', icon: Users, label: 'Parental' }] : []),
     ...(user?.role === 'admin' ? [{ to: '/admin', icon: ShieldAlert, label: 'Admin' }] : []),
   ];
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const rows = await apiClient.get<ConversationListItem[]>('/conversations');
+        if (!cancelled) setConversations(Array.isArray(rows) ? rows : []);
+      } catch {
+        if (!cancelled) setConversations([]);
+      }
+    };
+
+    load();
+    const interval = setInterval(load, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [user]);
+
+  const handleNewChat = async () => {
+    try {
+      const created = await apiClient.post<{ id: string }>('/conversations', {});
+      navigate(`/chat?c=${encodeURIComponent(created.id)}`);
+    } catch (err) {
+      // Fall back to chat route if conversation creation fails.
+      navigate('/chat');
+    }
+  };
 
   return (
     <div className="w-[280px] h-full glass-panel border-r border-border/50 flex flex-col">
@@ -25,10 +75,48 @@ export default function Sidebar() {
       </div>
 
       <div className="px-4 mb-6">
-        <NavLink to="/chat" className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white py-3 px-4 rounded-xl font-medium transition-all active:scale-95 shadow-lg shadow-primary/20">
+        <button
+          type="button"
+          onClick={handleNewChat}
+          className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover text-white py-3 px-4 rounded-xl font-medium transition-all active:scale-95 shadow-lg shadow-primary/20"
+        >
           <PlusCircle className="w-5 h-5" />
           New Chat
-        </NavLink>
+        </button>
+      </div>
+
+      {/* Conversation History */}
+      <div className="px-4 mb-4">
+        <p className="text-xs font-medium text-text-secondary px-2 mb-2">Chat History</p>
+        <div className="space-y-1 max-h-[35vh] overflow-y-auto no-scrollbar">
+          {conversations.map((c) => {
+            const title = (c.title && c.title.trim().length > 0 ? c.title : c.lastMessageText) || 'New Conversation';
+            const isActive = activeConversationId === c.id;
+            return (
+              <NavLink
+                key={c.id}
+                to={{ pathname: '/chat', search: `?c=${encodeURIComponent(c.id)}` }}
+                className={() => cn(
+                  'block px-3 py-2 rounded-xl border transition-colors',
+                  isActive
+                    ? 'bg-surface border-border text-text-primary'
+                    : 'bg-transparent border-transparent text-text-secondary hover:text-text-primary hover:bg-surface/60'
+                )}
+              >
+                <p className="text-sm font-medium truncate">{title}</p>
+                {c.lastMessageText && (
+                  <p className="text-xs text-text-secondary truncate">{c.lastMessageText}</p>
+                )}
+              </NavLink>
+            );
+          })}
+
+          {conversations.length === 0 && (
+            <div className="px-3 py-2 text-xs text-text-secondary">
+              No chats yet.
+            </div>
+          )}
+        </div>
       </div>
 
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto no-scrollbar">

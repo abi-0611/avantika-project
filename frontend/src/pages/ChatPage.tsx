@@ -1,19 +1,24 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Send, Paperclip, Smile, Settings, Edit3, MoreVertical, Share, Brain, StopCircle, Mic } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from '../hooks/useAuth';
-import { usePreferences } from '../context/PreferencesContext';
 import ChatBubble from '../components/ChatBubble';
 import VoiceWaveform from '../components/VoiceWaveform';
 import { cn } from '../lib/utils';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function ChatPage() {
   const { user } = useAuth();
-  const { memoryEnabled, setMemoryEnabled } = usePreferences();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const conversationId = searchParams.get('c');
+
+  const [conversationTitle, setConversationTitle] = useState<string>('New Conversation');
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [recording, setRecording] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -27,35 +32,63 @@ export default function ChatPage() {
   }, [messages, isTyping]);
 
   useEffect(() => {
+    const ensureConversation = async () => {
+      if (conversationId) return;
+      try {
+        const created = await apiClient.post<{ id: string; title?: string | null }>('/conversations', {});
+        navigate(`/chat?c=${encodeURIComponent(created.id)}`, { replace: true });
+      } catch (error) {
+        console.error('Failed to create conversation', error);
+      }
+    };
+
+    ensureConversation();
+  }, [conversationId, navigate]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+
     const fetchChats = async () => {
       try {
-        const data = await apiClient.get<any[]>('/chats');
+        const data = await apiClient.get<any[]>(`/chats?conversationId=${encodeURIComponent(conversationId)}`);
         setMessages(data);
       } catch (error) {
         console.error('Failed to fetch chats', error);
       }
     };
-    fetchChats();
+
+    const fetchConversation = async () => {
+      try {
+        const c = await apiClient.get<{ title?: string | null }>(`/conversations/${encodeURIComponent(conversationId)}`);
+        setConversationTitle(c?.title || 'New Conversation');
+      } catch {
+        setConversationTitle('New Conversation');
+      }
+    };
 
     const fetchMemoryStatus = async () => {
       try {
-        const status = await apiClient.get<{ enabled: boolean }>('/memory/status');
-        if (typeof status?.enabled === 'boolean') {
-          setMemoryEnabled(status.enabled);
-        }
+        const status = await apiClient.get<{ enabled: boolean }>(
+          `/memory/status?conversationId=${encodeURIComponent(conversationId)}`
+        );
+        if (typeof status?.enabled === 'boolean') setMemoryEnabled(status.enabled);
       } catch {
         // Ignore: memory is optional and may fail if not logged in or server down.
       }
     };
+
+    fetchConversation();
+    fetchChats();
     fetchMemoryStatus();
 
     const interval = setInterval(fetchChats, 3000);
     return () => clearInterval(interval);
-  }, [setMemoryEnabled]);
+  }, [conversationId]);
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() && !recording) return;
+    if (!conversationId) return;
 
     const now = Date.now();
 
@@ -71,7 +104,7 @@ export default function ChatPage() {
     setIsTyping(true);
 
     try {
-      const classifyRes = await apiClient.post<any>('/safety/classify', { text: userMsg.text });
+      const classifyRes = await apiClient.post<any>('/safety/classify', { text: userMsg.text, conversationId });
       
       const botMsg = {
         id: (now + 1).toString(),
@@ -83,8 +116,8 @@ export default function ChatPage() {
         explanation: classifyRes.explanation
       };
 
-      await apiClient.post('/chats', { ...userMsg, riskLevel: 'Safe' });
-      await apiClient.post('/chats', botMsg);
+      await apiClient.post('/chats', { ...userMsg, riskLevel: 'Safe', conversationId });
+      await apiClient.post('/chats', { ...botMsg, conversationId });
 
       setMessages((prev) => [...prev, botMsg]);
     } catch (error) {
@@ -104,7 +137,8 @@ export default function ChatPage() {
   const toggleMemory = async () => {
     try {
       const next = !memoryEnabled;
-      await apiClient.post('/memory/toggle', { enabled: next });
+      if (!conversationId) return;
+      await apiClient.post('/memory/toggle', { enabled: next, conversationId });
       setMemoryEnabled(next);
     } catch (error) {
       console.error('Failed to toggle memory', error);
@@ -116,7 +150,7 @@ export default function ChatPage() {
       {/* Header */}
       <header className="glass-panel border-b border-border/50 p-4 flex items-center justify-between z-10 sticky top-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-display font-bold text-white">New Conversation</h1>
+          <h1 className="text-lg font-display font-bold text-white">{conversationTitle}</h1>
           <button className="text-text-secondary hover:text-white transition-colors">
             <Edit3 className="w-4 h-4" />
           </button>

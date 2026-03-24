@@ -24,7 +24,8 @@ async function logSafetyEvent(uid: string, text: string, result: SafetyResult) {
 router.post('/classify', requireAuth, async (req: AuthRequest, res, next) => {
   try {
     const uid = req.user!.uid;
-    const { text, imageBase64, imageText } = req.body ?? {};
+    const { text, imageBase64, imageText, conversationId } = req.body ?? {};
+    const convId = typeof conversationId === 'string' && conversationId.trim().length > 0 ? conversationId.trim() : undefined;
 
     const rules = await db.select().from(safetyRules);
     const settingsRows = await db
@@ -40,9 +41,9 @@ router.post('/classify', requireAuth, async (req: AuthRequest, res, next) => {
     let result: SafetyResult;
 
     if (typeof imageBase64 === 'string' && imageBase64.trim().length > 0) {
-      result = await classifyImageRisk(imageBase64, uid, typeof imageText === 'string' ? imageText : inputText, settings);
+      result = await classifyImageRisk(imageBase64, uid, convId, typeof imageText === 'string' ? imageText : inputText, settings);
     } else {
-      result = await classifyRisk(inputText, uid, rules as any, settings);
+      result = await classifyRisk(inputText, uid, convId, rules as any, settings);
     }
 
     await logSafetyEvent(uid, inputText, result);

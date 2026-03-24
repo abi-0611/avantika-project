@@ -6,6 +6,7 @@ import fs from 'fs';
 
 import authRoutes from "./src/routes/auth";
 import chatRoutes from "./src/routes/chats";
+import conversationsRoutes from "./src/routes/conversations";
 import rulesRoutes from "./src/routes/rules";
 import logsRoutes from "./src/routes/logs";
 import supervisionRoutes from "./src/routes/supervision";
@@ -33,6 +34,7 @@ async function startServer() {
   });
 
   app.use('/api/auth', authRoutes);
+  app.use('/api/conversations', conversationsRoutes);
   app.use('/api/chats', chatRoutes);
   app.use('/api/rules', rulesRoutes);
   app.use('/api/logs', logsRoutes);
