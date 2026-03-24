@@ -200,7 +200,7 @@ export async function classifyRisk(
 
   // 4. Call Ollama
   const data = await callOllamaGenerate({
-    model: process.env.OLLAMA_MODEL || 'llama3.2',
+    model: process.env.OLLAMA_MODEL || 'llama3.1',
     prompt: `${systemPrompt}\n\nChild message: "${text}"`,
     stream: false,
     format: 'json',

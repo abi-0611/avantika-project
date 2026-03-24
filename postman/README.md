@@ -20,7 +20,7 @@ If port `3000` is already in use, you can run with a different port:
 
 3) Optional (only required for `/api/safety/classify`): Ollama running and models pulled
 - `ollama serve`
-- `ollama pull llama3.2`
+- `ollama pull llama3.1`
 - `ollama pull llava`
 
 ## Import into Postman
