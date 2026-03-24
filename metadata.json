@@ -1,0 +1,5 @@
+{
+  "name": "ShieldBot: Safety-Aware NLP Chatbot",
+  "description": "A safety-focused AI chatbot designed for vulnerable users, featuring multi-level risk classification, graduated responses, and proactive escalation.",
+  "requestFramePermissions": ["microphone", "camera"]
+}

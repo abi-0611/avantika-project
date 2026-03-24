@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-luxury-black: #0a0a0a;
+  --color-luxury-gold: #D4AF37;
+  --color-luxury-paper: #F5F2ED;
+  --color-luxury-ink: #1A1A1A;
+}
+
+@layer base {
+  body {
+    @apply antialiased bg-luxury-black text-white selection:bg-blue-500/30;
+    font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  /* Light mode overrides */
+  body.light {
+    @apply bg-stone-50 text-stone-900;
+  }
+}
+
+.glass-header {
+  @apply bg-luxury-black/80 backdrop-blur-xl border-b border-white/10;
+}
+
+body.light .glass-header {
+  background: rgba(255,255,255,0.85);
+  border-color: rgba(0,0,0,0.08);
+}
+
+.glass-card {
+  @apply bg-white/5 backdrop-blur-md border border-white/10;
+}
+
+body.light .glass-card {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.08);
+}
+
+.luxury-label {
+  @apply text-[10px] uppercase tracking-[0.2em] font-semibold opacity-60;
+}
+
+/* Font size classes */
+.chat-text-sm { font-size: 13px; line-height: 1.5; }
+.chat-text-md { font-size: 15px; line-height: 1.6; }
+.chat-text-lg { font-size: 17px; line-height: 1.7; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { @apply bg-transparent; }
+::-webkit-scrollbar-thumb { @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors; }
