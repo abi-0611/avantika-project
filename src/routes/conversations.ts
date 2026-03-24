@@ -89,6 +89,28 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res, next) => {
   }
 });
 
+router.patch('/:id', requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const uid = req.user!.uid;
+    const id = req.params.id;
+    const { title } = req.body ?? {};
+
+    const nextTitleRaw = typeof title === 'string' ? title.trim() : '';
+    const nextTitle = nextTitleRaw.length > 0 ? nextTitleRaw.slice(0, 80) : null;
+
+    const updated = await db
+      .update(conversations)
+      .set({ title: nextTitle, updatedAt: Date.now() })
+      .where(and(eq(conversations.id, id as any), eq(conversations.uid, uid)))
+      .returning();
+
+    if (!updated[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(updated[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.delete('/:id', requireAuth, async (req: AuthRequest, res, next) => {
   try {
     const uid = req.user!.uid;

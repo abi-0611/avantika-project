@@ -145,13 +145,35 @@ export default function ChatPage() {
     }
   };
 
+  const handleRenameConversation = async () => {
+    if (!conversationId) return;
+    const current = conversationTitle || 'New Conversation';
+    const next = window.prompt('Rename conversation', current);
+    if (next === null) return;
+
+    try {
+      const updated = await apiClient.patch<{ title?: string | null }>(
+        `/conversations/${encodeURIComponent(conversationId)}`,
+        { title: next }
+      );
+      setConversationTitle(updated?.title || 'New Conversation');
+    } catch (error) {
+      console.error('Failed to rename conversation', error);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full relative">
       {/* Header */}
       <header className="glass-panel border-b border-border/50 p-4 flex items-center justify-between z-10 sticky top-0">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-display font-bold text-white">{conversationTitle}</h1>
-          <button className="text-text-secondary hover:text-white transition-colors">
+          <button
+            type="button"
+            onClick={handleRenameConversation}
+            className="text-text-secondary hover:text-white transition-colors"
+            title="Rename conversation"
+          >
             <Edit3 className="w-4 h-4" />
           </button>
         </div>
