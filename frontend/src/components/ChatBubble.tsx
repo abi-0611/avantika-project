@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Shield, ThumbsUp, ThumbsDown, Copy, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
 import RiskBadge from './RiskBadge';
+import { usePreferences } from '../context/PreferencesContext';
 
 interface ChatBubbleProps {
   key?: React.Key;
@@ -18,6 +19,10 @@ interface ChatBubbleProps {
 
 export default function ChatBubble({ message }: ChatBubbleProps) {
   const isUser = message.sender === 'user';
+  const { chatFontSize } = usePreferences();
+
+  const fontSizeClass =
+    chatFontSize === 'sm' ? 'text-sm' : chatFontSize === 'lg' ? 'text-base' : 'text-[15px]';
 
   return (
     <motion.div
@@ -35,7 +40,8 @@ export default function ChatBubble({ message }: ChatBubbleProps) {
 
         <div className="flex flex-col gap-1 min-w-0">
           <div className={cn(
-            "px-5 py-3.5 text-[15px] leading-relaxed relative",
+            "px-5 py-3.5 leading-relaxed relative",
+            fontSizeClass,
             isUser 
               ? "bg-gradient-to-br from-primary to-secondary text-white rounded-2xl rounded-tr-sm shadow-lg shadow-primary/20" 
               : "glass-panel rounded-2xl rounded-tl-sm"

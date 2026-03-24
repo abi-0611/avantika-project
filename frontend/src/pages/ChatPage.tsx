@@ -3,16 +3,17 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Send, Paperclip, Smile, Settings, Edit3, MoreVertical, Share, Brain, StopCircle, Mic } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from '../hooks/useAuth';
+import { usePreferences } from '../context/PreferencesContext';
 import ChatBubble from '../components/ChatBubble';
 import VoiceWaveform from '../components/VoiceWaveform';
 import { cn } from '../lib/utils';
 
 export default function ChatPage() {
   const { user } = useAuth();
+  const { memoryEnabled, setMemoryEnabled } = usePreferences();
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [memoryEnabled, setMemoryEnabled] = useState(true);
   const [recording, setRecording] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -36,9 +37,21 @@ export default function ChatPage() {
     };
     fetchChats();
 
+    const fetchMemoryStatus = async () => {
+      try {
+        const status = await apiClient.get<{ enabled: boolean }>('/memory/status');
+        if (typeof status?.enabled === 'boolean') {
+          setMemoryEnabled(status.enabled);
+        }
+      } catch {
+        // Ignore: memory is optional and may fail if not logged in or server down.
+      }
+    };
+    fetchMemoryStatus();
+
     const interval = setInterval(fetchChats, 3000);
     return () => clearInterval(interval);
-  }, []);
+  }, [setMemoryEnabled]);
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -90,8 +103,9 @@ export default function ChatPage() {
 
   const toggleMemory = async () => {
     try {
-      await apiClient.post('/memory/toggle', { enabled: !memoryEnabled });
-      setMemoryEnabled(!memoryEnabled);
+      const next = !memoryEnabled;
+      await apiClient.post('/memory/toggle', { enabled: next });
+      setMemoryEnabled(next);
     } catch (error) {
       console.error('Failed to toggle memory', error);
     }

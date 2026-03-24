@@ -3,20 +3,28 @@ import { motion } from 'motion/react';
 import { User, Moon, Sun, Type, Bell, Brain, Download, Trash2, Save, X, AlertTriangle, Settings } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { authService } from '../services/authService';
+import { apiClient } from '../services/apiClient';
 import { useToast } from '../components/Toast';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { usePreferences } from '../context/PreferencesContext';
 
 export default function SettingsPage() {
   const { user, updateUser, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const {
+    theme,
+    setTheme,
+    chatFontSize,
+    setChatFontSize,
+    notificationsEnabled,
+    setNotificationsEnabled,
+    memoryEnabled,
+    setMemoryEnabled,
+  } = usePreferences();
   
   const [displayName, setDisplayName] = useState(user?.displayName || '');
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [fontSize, setFontSize] = useState<'sm' | 'md' | 'lg'>('md');
-  const [notifications, setNotifications] = useState(true);
-  const [memory, setMemory] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
@@ -38,6 +46,16 @@ export default function SettingsPage() {
       navigate('/auth');
     } catch (error) {
       showToast('Failed to delete account', 'error');
+    }
+  };
+
+  const handleToggleMemory = async () => {
+    const next = !memoryEnabled;
+    try {
+      await apiClient.post('/memory/toggle', { enabled: next });
+      setMemoryEnabled(next);
+    } catch (error) {
+      showToast('Failed to update memory preference', 'error');
     }
   };
 
@@ -126,8 +144,8 @@ export default function SettingsPage() {
               {['sm', 'md', 'lg'].map((size) => (
                 <button 
                   key={size}
-                  onClick={() => setFontSize(size as any)}
-                  className={cn("px-4 py-2 rounded-lg transition-all text-sm font-medium uppercase", fontSize === size ? "bg-primary text-white" : "text-text-secondary hover:text-white")}
+                    onClick={() => setChatFontSize(size as any)}
+                    className={cn("px-4 py-2 rounded-lg transition-all text-sm font-medium uppercase", chatFontSize === size ? "bg-primary text-white" : "text-text-secondary hover:text-white")}
                 >
                   {size}
                 </button>
@@ -144,12 +162,12 @@ export default function SettingsPage() {
               <p className="text-sm text-text-secondary">Receive alerts and updates</p>
             </div>
             <button 
-              onClick={() => setNotifications(!notifications)}
-              className={cn("w-12 h-6 rounded-full transition-colors relative", notifications ? "bg-primary" : "bg-surface border border-border")}
+              onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+              className={cn("w-12 h-6 rounded-full transition-colors relative", notificationsEnabled ? "bg-primary" : "bg-surface border border-border")}
             >
               <motion.div 
                 layout
-                className={cn("w-4 h-4 rounded-full bg-white absolute top-1", notifications ? "right-1" : "left-1")}
+                className={cn("w-4 h-4 rounded-full bg-white absolute top-1", notificationsEnabled ? "right-1" : "left-1")}
               />
             </button>
           </div>
@@ -165,12 +183,12 @@ export default function SettingsPage() {
               <p className="text-sm text-text-secondary">Allow AI to remember past conversations</p>
             </div>
             <button 
-              onClick={() => setMemory(!memory)}
-              className={cn("w-12 h-6 rounded-full transition-colors relative", memory ? "bg-primary" : "bg-surface border border-border")}
+              onClick={handleToggleMemory}
+              className={cn("w-12 h-6 rounded-full transition-colors relative", memoryEnabled ? "bg-primary" : "bg-surface border border-border")}
             >
               <motion.div 
                 layout
-                className={cn("w-4 h-4 rounded-full bg-white absolute top-1", memory ? "right-1" : "left-1")}
+                className={cn("w-4 h-4 rounded-full bg-white absolute top-1", memoryEnabled ? "right-1" : "left-1")}
               />
             </button>
           </div>

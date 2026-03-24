@@ -53,6 +53,24 @@
   }
 }
 
+/* Preferences (theme + font size)
+   Theme is implemented as variable overrides so the rest of the design system stays intact. */
+:root {
+  --sb-background-dark: var(--color-background);
+  --sb-surface-dark: var(--color-surface);
+  --sb-surface-hover-dark: var(--color-surface-hover);
+  --sb-border-dark: var(--color-border);
+  --sb-glass-dark: var(--color-glass);
+}
+
+:root[data-theme="light"] {
+  --color-background: color-mix(in srgb, var(--sb-background-dark) 70%, var(--color-text-primary) 30%);
+  --color-surface: color-mix(in srgb, var(--sb-surface-dark) 65%, var(--color-text-primary) 35%);
+  --color-surface-hover: color-mix(in srgb, var(--sb-surface-hover-dark) 60%, var(--color-text-primary) 40%);
+  --color-border: color-mix(in srgb, var(--sb-border-dark) 50%, var(--color-text-primary) 50%);
+  --color-glass: color-mix(in srgb, var(--sb-glass-dark) 70%, var(--color-text-primary) 30%);
+}
+
 /* Animations */
 @keyframes float {
   0% { transform: translateY(0px) scale(1); }

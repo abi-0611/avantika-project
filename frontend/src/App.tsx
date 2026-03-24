@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { PreferencesProvider } from './context/PreferencesContext';
 import { ToastProvider } from './components/Toast';
 import { useAuth } from './hooks/useAuth';
 import Layout from './components/Layout';
@@ -37,36 +38,38 @@ function ProtectedRoute({ children, allowedRoles }: { children: React.ReactNode,
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/auth" element={<AuthPage />} />
-            
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }>
-              <Route index element={<HomePage />} />
-              <Route path="chat" element={<ChatPage />} />
-              <Route path="parental" element={
-                <ProtectedRoute allowedRoles={['parent', 'admin']}>
-                  <ParentalPage />
+    <PreferencesProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/auth" element={<AuthPage />} />
+              
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Layout />
                 </ProtectedRoute>
-              } />
-              <Route path="admin" element={
-                <ProtectedRoute allowedRoles={['admin']}>
-                  <AdminPage />
-                </ProtectedRoute>
-              } />
-              <Route path="settings" element={<SettingsPage />} />
-            </Route>
-            
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </ToastProvider>
-    </AuthProvider>
+              }>
+                <Route index element={<HomePage />} />
+                <Route path="chat" element={<ChatPage />} />
+                <Route path="parental" element={
+                  <ProtectedRoute allowedRoles={['parent', 'admin']}>
+                    <ParentalPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="admin" element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <AdminPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
+              
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </ToastProvider>
+      </AuthProvider>
+    </PreferencesProvider>
   );
 }
