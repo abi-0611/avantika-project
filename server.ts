@@ -7,6 +7,7 @@ import fs from 'fs';
 import authRoutes from "./src/routes/auth";
 import chatRoutes from "./src/routes/chats";
 import conversationsRoutes from "./src/routes/conversations";
+import adminRoutes from "./src/routes/admin";
 import rulesRoutes from "./src/routes/rules";
 import logsRoutes from "./src/routes/logs";
 import supervisionRoutes from "./src/routes/supervision";
@@ -26,14 +27,8 @@ async function startServer() {
     res.json({ status: "ok", message: "ShieldBot Backend is running" });
   });
 
-  // Mock endpoint for "ML retraining" as requested in requirements
-  app.post("/api/admin/retrain", (req, res) => {
-    // In a real scikit-learn environment, this would trigger a training job.
-    // For this environment, we'll simulate it.
-    res.json({ success: true, message: "Safety models retrained successfully" });
-  });
-
   app.use('/api/auth', authRoutes);
+  app.use('/api/admin', adminRoutes);
   app.use('/api/conversations', conversationsRoutes);
   app.use('/api/chats', chatRoutes);
   app.use('/api/rules', rulesRoutes);

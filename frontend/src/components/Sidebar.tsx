@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Shield, MessageSquare, Home, Settings, Users, ShieldAlert, PlusCircle } from 'lucide-react';
+import { Shield, MessageSquare, Home, Settings, Users, ShieldAlert, PlusCircle, Trash2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 import { apiClient } from '../services/apiClient';
@@ -41,7 +41,14 @@ export default function Sidebar() {
     const load = async () => {
       try {
         const rows = await apiClient.get<ConversationListItem[]>('/conversations');
-        if (!cancelled) setConversations(Array.isArray(rows) ? rows : []);
+        const safeRows = Array.isArray(rows) ? rows : [];
+        // Hide legacy empty conversations (created without any messages).
+        const filtered = safeRows.filter((c) => {
+          const hasTitle = typeof c.title === 'string' && c.title.trim().length > 0;
+          const hasLast = typeof c.lastMessageText === 'string' && c.lastMessageText.trim().length > 0;
+          return hasTitle || hasLast;
+        });
+        if (!cancelled) setConversations(filtered);
       } catch {
         if (!cancelled) setConversations([]);
       }
@@ -56,12 +63,22 @@ export default function Sidebar() {
   }, [user]);
 
   const handleNewChat = async () => {
+    // Do not create an empty conversation. Conversation is created on first message send.
+    navigate('/chat');
+  };
+
+  const handleDeleteConversation = async (id: string) => {
+    const ok = window.confirm('Delete this conversation? This will remove all messages in it.');
+    if (!ok) return;
+
     try {
-      const created = await apiClient.post<{ id: string }>('/conversations', {});
-      navigate(`/chat?c=${encodeURIComponent(created.id)}`);
-    } catch (err) {
-      // Fall back to chat route if conversation creation fails.
-      navigate('/chat');
+      await apiClient.delete(`/conversations/${encodeURIComponent(id)}`);
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (activeConversationId === id) {
+        navigate('/chat', { replace: true });
+      }
+    } catch {
+      // Keep silent to avoid noisy UI in sidebar.
     }
   };
 
@@ -93,21 +110,37 @@ export default function Sidebar() {
             const title = (c.title && c.title.trim().length > 0 ? c.title : c.lastMessageText) || 'New Conversation';
             const isActive = activeConversationId === c.id;
             return (
-              <NavLink
+              <div
                 key={c.id}
-                to={{ pathname: '/chat', search: `?c=${encodeURIComponent(c.id)}` }}
-                className={() => cn(
-                  'block px-3 py-2 rounded-xl border transition-colors',
+                className={cn(
+                  'group flex items-start gap-2 px-3 py-2 rounded-xl border transition-colors',
                   isActive
                     ? 'bg-surface border-border text-text-primary'
                     : 'bg-transparent border-transparent text-text-secondary hover:text-text-primary hover:bg-surface/60'
                 )}
               >
-                <p className="text-sm font-medium truncate">{title}</p>
-                {c.lastMessageText && (
-                  <p className="text-xs text-text-secondary truncate">{c.lastMessageText}</p>
-                )}
-              </NavLink>
+                <NavLink
+                  to={{ pathname: '/chat', search: `?c=${encodeURIComponent(c.id)}` }}
+                  className="flex-1 min-w-0"
+                >
+                  <p className="text-sm font-medium truncate">{title}</p>
+                  {c.lastMessageText && (
+                    <p className="text-xs text-text-secondary truncate">{c.lastMessageText}</p>
+                  )}
+                </NavLink>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDeleteConversation(c.id);
+                  }}
+                  className="p-1.5 rounded-lg text-text-secondary hover:text-danger hover:bg-danger/10 opacity-0 group-hover:opacity-100 transition-colors"
+                  title="Delete conversation"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             );
           })}
 

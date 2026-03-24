@@ -1,17 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ShieldAlert, RefreshCw, Plus, Trash2, Search, Shield } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Plus, Trash2, Search, Shield, Users, Pencil } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { useToast } from '../components/Toast';
 import RiskBadge from '../components/RiskBadge';
 import { cn } from '../lib/utils';
+import { useAuth } from '../hooks/useAuth';
+
+type AdminUserRow = {
+  uid: string;
+  email: string;
+  displayName: string | null;
+  role: 'user' | 'parent' | 'child' | 'admin' | string;
+  createdAt: number;
+};
 
 export default function AdminPage() {
   const [rules, setRules] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [retraining, setRetraining] = useState(false);
   const { showToast } = useToast();
+  const { user: currentUser } = useAuth();
+
+  const [activeTab, setActiveTab] = useState<'safety' | 'users'>('safety');
+  const [userQuery, setUserQuery] = useState('');
 
   const [newRule, setNewRule] = useState({
     keyword: '',
@@ -37,6 +51,23 @@ export default function AdminPage() {
       setLoading(false);
     }
   };
+
+  const fetchUsers = async () => {
+    try {
+      const rows = await apiClient.get<AdminUserRow[]>('/admin/users');
+      setUsers(rows);
+    } catch (error) {
+      console.error('Failed to fetch users', error);
+      showToast('Failed to load users', 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'users') {
+      fetchUsers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const handleAddRule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +103,60 @@ export default function AdminPage() {
     }
   };
 
+  const filteredUsers = useMemo(() => {
+    const q = userQuery.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter((u) => {
+      return (
+        u.email.toLowerCase().includes(q) ||
+        (u.displayName ?? '').toLowerCase().includes(q) ||
+        u.uid.toLowerCase().includes(q) ||
+        String(u.role).toLowerCase().includes(q)
+      );
+    });
+  }, [users, userQuery]);
+
+  const handleEditUser = async (u: AdminUserRow) => {
+    const email = window.prompt('Email:', u.email);
+    if (email === null) return;
+
+    const displayName = window.prompt('Display name (blank to clear):', u.displayName ?? '');
+    if (displayName === null) return;
+
+    const role = window.prompt('Role (user | parent | child | admin):', String(u.role ?? 'user'));
+    if (role === null) return;
+
+    try {
+      await apiClient.patch(`/admin/users/${encodeURIComponent(u.uid)}`, {
+        email,
+        displayName: displayName.trim() ? displayName.trim() : null,
+        role: role.trim(),
+      });
+      showToast('User updated', 'success');
+      fetchUsers();
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to update user', 'error');
+    }
+  };
+
+  const handleDeleteUser = async (u: AdminUserRow) => {
+    if (currentUser?.uid && u.uid === currentUser.uid) {
+      showToast('You cannot delete your own account here', 'error');
+      return;
+    }
+
+    const ok = window.confirm(`Delete user ${u.email}? This will remove their chats, logs, conversations, and child/guardian links.`);
+    if (!ok) return;
+
+    try {
+      await apiClient.delete(`/admin/users/${encodeURIComponent(u.uid)}`);
+      showToast('User deleted', 'success');
+      fetchUsers();
+    } catch (error: any) {
+      showToast(error?.message || 'Failed to delete user', 'error');
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -88,18 +173,46 @@ export default function AdminPage() {
           <h1 className="text-2xl font-display font-bold text-white flex items-center gap-2">
             <ShieldAlert className="w-6 h-6 text-danger" /> Admin Dashboard
           </h1>
-          <p className="text-sm text-text-secondary mt-1">Manage safety rules and monitor system logs.</p>
+          <p className="text-sm text-text-secondary mt-1">
+            {activeTab === 'safety'
+              ? 'Manage safety rules and monitor system logs.'
+              : 'Manage user accounts across the system.'}
+          </p>
         </div>
-        <button 
-          onClick={handleRetrain}
-          disabled={retraining}
-          className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-70"
-        >
-          <RefreshCw className={cn("w-4 h-4", retraining && "animate-spin")} />
-          {retraining ? 'Retraining...' : 'Retrain Models'}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center rounded-xl border border-border bg-surface/40 overflow-hidden">
+            <button
+              onClick={() => setActiveTab('safety')}
+              className={cn(
+                'px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2',
+                activeTab === 'safety' ? 'bg-surface text-white' : 'text-text-secondary hover:text-white'
+              )}
+            >
+              <Shield className="w-4 h-4" /> Safety
+            </button>
+            <button
+              onClick={() => setActiveTab('users')}
+              className={cn(
+                'px-3 py-2 text-sm font-medium transition-colors flex items-center gap-2 border-l border-border',
+                activeTab === 'users' ? 'bg-surface text-white' : 'text-text-secondary hover:text-white'
+              )}
+            >
+              <Users className="w-4 h-4" /> Users
+            </button>
+          </div>
+
+          <button 
+            onClick={handleRetrain}
+            disabled={retraining}
+            className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-70"
+          >
+            <RefreshCw className={cn("w-4 h-4", retraining && "animate-spin")} />
+            {retraining ? 'Retraining...' : 'Retrain Models'}
+          </button>
+        </div>
       </header>
 
+      {activeTab === 'safety' && (
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden p-6 gap-6">
         {/* Left Panel - Rules Manager */}
         <div className="w-full lg:w-1/3 glass-panel rounded-2xl flex flex-col overflow-hidden border border-border/50">
@@ -216,6 +329,81 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+      )}
+
+      {activeTab === 'users' && (
+      <div className="flex-1 overflow-hidden p-6">
+        <div className="glass-panel rounded-2xl flex flex-col overflow-hidden border border-border/50 h-full">
+          <div className="p-5 border-b border-border/50 bg-surface/30 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-display font-bold text-white">Users</h2>
+              <p className="text-sm text-text-secondary">View, edit, or delete any user account.</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-secondary" />
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={userQuery}
+                  onChange={(e) => setUserQuery(e.target.value)}
+                  className="w-full bg-surface border border-border rounded-xl py-1.5 pl-9 pr-3 text-sm text-white focus:outline-none focus:border-primary/50"
+                />
+              </div>
+              <button
+                onClick={fetchUsers}
+                className="bg-surface hover:bg-surface-hover border border-border text-white px-3 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" /> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto no-scrollbar">
+            <div className="min-w-[900px]">
+              <div className="grid grid-cols-[240px_180px_120px_240px_120px] gap-3 px-5 py-3 text-xs text-text-secondary border-b border-border/50 bg-surface/10">
+                <div>Email</div>
+                <div>Name</div>
+                <div>Role</div>
+                <div>UID</div>
+                <div className="text-right">Actions</div>
+              </div>
+
+              {filteredUsers.map((u) => (
+                <div key={u.uid} className="grid grid-cols-[240px_180px_120px_240px_120px] gap-3 px-5 py-3 text-sm border-b border-border/30 hover:bg-surface/20">
+                  <div className="text-white truncate" title={u.email}>{u.email}</div>
+                  <div className="text-white truncate" title={u.displayName ?? ''}>{u.displayName ?? <span className="text-text-secondary">(none)</span>}</div>
+                  <div className="text-white font-mono">{String(u.role)}</div>
+                  <div className="text-text-secondary font-mono truncate" title={u.uid}>{u.uid}</div>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => handleEditUser(u)}
+                      className="p-2 text-text-secondary hover:text-white hover:bg-surface rounded-lg transition-colors"
+                      title="Edit user"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(u)}
+                      disabled={!!currentUser?.uid && u.uid === currentUser.uid}
+                      className="p-2 text-text-secondary hover:text-danger hover:bg-danger/10 rounded-lg transition-colors disabled:opacity-50"
+                      title={!!currentUser?.uid && u.uid === currentUser.uid ? 'Cannot delete yourself' : 'Delete user'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {filteredUsers.length === 0 && (
+                <div className="p-10 text-center text-text-secondary text-sm">No users found.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
     </div>
   );
 }

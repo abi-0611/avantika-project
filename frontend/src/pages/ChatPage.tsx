@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, Paperclip, Smile, Settings, Edit3, MoreVertical, Share, Brain, StopCircle, Mic } from 'lucide-react';
+import { Send, Paperclip, Smile, Settings, Edit3, MoreVertical, Share, Brain, StopCircle, Mic, Trash2 } from 'lucide-react';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from '../hooks/useAuth';
 import ChatBubble from '../components/ChatBubble';
@@ -32,17 +32,11 @@ export default function ChatPage() {
   }, [messages, isTyping]);
 
   useEffect(() => {
-    const ensureConversation = async () => {
-      if (conversationId) return;
-      try {
-        const created = await apiClient.post<{ id: string; title?: string | null }>('/conversations', {});
-        navigate(`/chat?c=${encodeURIComponent(created.id)}`, { replace: true });
-      } catch (error) {
-        console.error('Failed to create conversation', error);
-      }
-    };
-
-    ensureConversation();
+    if (!conversationId) {
+      setConversationTitle('New Chat');
+      setMessages([]);
+      setMemoryEnabled(true);
+    }
   }, [conversationId, navigate]);
 
   useEffect(() => {
@@ -88,13 +82,27 @@ export default function ChatPage() {
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() && !recording) return;
-    if (!conversationId) return;
+
+    let convId = conversationId;
+    let createdNow = false;
+    if (!convId) {
+      try {
+        const created = await apiClient.post<{ id: string; title?: string | null }>('/conversations', {});
+        convId = created.id;
+        createdNow = true;
+        navigate(`/chat?c=${encodeURIComponent(created.id)}`, { replace: true });
+      } catch (error) {
+        console.error('Failed to create conversation', error);
+        return;
+      }
+    }
 
     const now = Date.now();
 
+    const userText = input;
     const userMsg = {
       id: now.toString(),
-      text: input,
+      text: userText,
       sender: 'user',
       timestamp: now,
     };
@@ -104,7 +112,7 @@ export default function ChatPage() {
     setIsTyping(true);
 
     try {
-      const classifyRes = await apiClient.post<any>('/safety/classify', { text: userMsg.text, conversationId });
+      const classifyRes = await apiClient.post<any>('/safety/classify', { text: userMsg.text, conversationId: convId });
       
       const botMsg = {
         id: (now + 1).toString(),
@@ -116,12 +124,26 @@ export default function ChatPage() {
         explanation: classifyRes.explanation
       };
 
-      await apiClient.post('/chats', { ...userMsg, riskLevel: 'Safe', conversationId });
-      await apiClient.post('/chats', { ...botMsg, conversationId });
+      await apiClient.post('/chats', { ...userMsg, riskLevel: 'Safe', conversationId: convId });
+      await apiClient.post('/chats', { ...botMsg, conversationId: convId });
+
+      if (createdNow) {
+        setConversationTitle(userMsg.text.trim().slice(0, 60) || 'New Conversation');
+      }
 
       setMessages((prev) => [...prev, botMsg]);
     } catch (error) {
       console.error('Failed to send message', error);
+      if (createdNow && convId) {
+        try {
+          await apiClient.delete(`/conversations/${encodeURIComponent(convId)}`);
+        } catch {
+          // Ignore cleanup errors.
+        }
+        navigate('/chat', { replace: true });
+        setMessages([]);
+        setConversationTitle('New Chat');
+      }
     } finally {
       setIsTyping(false);
     }
@@ -162,6 +184,21 @@ export default function ChatPage() {
     }
   };
 
+  const handleDeleteConversation = async () => {
+    if (!conversationId) return;
+    const ok = window.confirm('Delete this conversation? This will remove all messages in it.');
+    if (!ok) return;
+
+    try {
+      await apiClient.delete(`/conversations/${encodeURIComponent(conversationId)}`);
+      navigate('/chat', { replace: true });
+      setMessages([]);
+      setConversationTitle('New Chat');
+    } catch (error) {
+      console.error('Failed to delete conversation', error);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full relative">
       {/* Header */}
@@ -171,15 +208,32 @@ export default function ChatPage() {
           <button
             type="button"
             onClick={handleRenameConversation}
-            className="text-text-secondary hover:text-white transition-colors"
+            disabled={!conversationId}
+            className={cn(
+              'text-text-secondary hover:text-white transition-colors',
+              !conversationId && 'opacity-50 cursor-not-allowed hover:text-text-secondary'
+            )}
             title="Rename conversation"
           >
             <Edit3 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteConversation}
+            disabled={!conversationId}
+            className={cn(
+              'text-text-secondary hover:text-danger transition-colors',
+              !conversationId && 'opacity-50 cursor-not-allowed hover:text-text-secondary'
+            )}
+            title="Delete conversation"
+          >
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
         <div className="flex items-center gap-3">
           <button 
             onClick={toggleMemory}
+            disabled={!conversationId}
             className={cn(
               "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border",
               memoryEnabled 
