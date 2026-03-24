@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, AlertCircle, Plus, Trash2, BarChart3, History, X, RefreshCw } from 'lucide-react';
-import { db } from '../firebase';
-import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { SafetyRule, SafetyLog } from '../types';
 import { motion } from 'motion/react';
-
-import { handleFirestoreError, OperationType } from '../services/errorService';
+import { apiDelete, apiGet, apiPost } from '../services/apiClient';
 
 export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [rules, setRules] = useState<SafetyRule[]>([]);
@@ -14,47 +11,54 @@ export default function AdminDashboard({ onClose }: { onClose: () => void }) {
   const [isRetraining, setIsRetraining] = useState(false);
 
   useEffect(() => {
-    const rulesUnsub = onSnapshot(collection(db, 'rules'), (snapshot) => {
-      setRules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SafetyRule)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'rules'));
-
-    const logsQuery = query(collection(db, 'logs'), orderBy('timestamp', 'desc'), limit(50));
-    const logsUnsub = onSnapshot(logsQuery, (snapshot) => {
-      setLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SafetyLog)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'logs'));
-
-    return () => {
-      rulesUnsub();
-      logsUnsub();
+    const load = async () => {
+      try {
+        const [rulesData, logsData] = await Promise.all([
+          apiGet('/api/rules'),
+          apiGet('/api/logs?limit=50'),
+        ]);
+        setRules(rulesData);
+        setLogs(logsData);
+      } catch {
+        // ignore; apiClient handles 401
+      }
     };
+
+    load();
+    const interval = setInterval(load, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const addRule = async () => {
     if (!newRule.keyword) return;
     try {
-      await addDoc(collection(db, 'rules'), newRule);
+      await apiPost('/api/rules', {
+        keyword: String(newRule.keyword).toLowerCase(),
+        category: newRule.category,
+        riskLevel: newRule.riskLevel,
+      });
       setNewRule({ keyword: '', category: 'General', riskLevel: 'Low' });
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'rules');
+      console.error(err);
     }
   };
 
-  const deleteRule = async (id: string) => {
+  const deleteRule = async (id: string | number) => {
     try {
-      await deleteDoc(doc(db, 'rules', id));
+      await apiDelete(`/api/rules/${encodeURIComponent(String(id))}`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `rules/${id}`);
+      console.error(err);
     }
   };
 
   const retrainModels = async () => {
     setIsRetraining(true);
     try {
-      const res = await fetch('/api/admin/retrain', { method: 'POST' });
-      const data = await res.json();
-      alert(data.message);
+      const data = await apiPost('/api/admin/retrain', {});
+      alert(data?.message ?? 'Retrain triggered');
     } catch (e) {
       console.error(e);
+      alert('Retrain endpoint not available');
     } finally {
       setIsRetraining(false);
     }

@@ -1,14 +1,26 @@
+import 'dotenv/config';
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import cors from "cors";
 
+import authRoutes from "./src/routes/auth";
+import chatRoutes from "./src/routes/chats";
+import rulesRoutes from "./src/routes/rules";
+import logsRoutes from "./src/routes/logs";
+import supervisionRoutes from "./src/routes/supervision";
+import childSettingsRoutes from "./src/routes/childSettings";
+import safetyRoutes from "./src/routes/safety";
+import memoryRoutes from "./src/routes/memory";
+
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT ?? 3000);
+  const hmrEnabled = process.env.DISABLE_HMR !== 'true';
+  const HMR_PORT = Number(process.env.VITE_HMR_PORT ?? (PORT + 1));
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '15mb' }));
 
   // API routes
   app.get("/api/health", (req, res) => {
@@ -22,10 +34,26 @@ async function startServer() {
     res.json({ success: true, message: "Safety models retrained successfully" });
   });
 
+  app.use('/api/auth', authRoutes);
+  app.use('/api/chats', chatRoutes);
+  app.use('/api/rules', rulesRoutes);
+  app.use('/api/logs', logsRoutes);
+  app.use('/api/supervision', supervisionRoutes);
+  app.use('/api/child-settings', childSettingsRoutes);
+  app.use('/api/safety', safetyRoutes);
+  app.use('/api/memory', memoryRoutes);
+
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    res.status(500).json({ error: err?.message || 'Internal server error' });
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: hmrEnabled ? { port: HMR_PORT, clientPort: HMR_PORT } : false,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

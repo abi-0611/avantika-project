@@ -1,0 +1,553 @@
+{
+  "info": {
+    "_postman_id": "b7c59c4b-2d1f-4a34-ae3c-530f71b98947",
+    "name": "ShieldBot API (Local)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{parentToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /api/health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('health ok', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const j = pm.response.json();",
+                  "  pm.expect(j).to.have.property('status');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /api/auth/register (parent)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{parentEmail}}\",\n  \"password\": \"{{parentPassword}}\",\n  \"displayName\": \"{{parentDisplayName}}\",\n  \"role\": \"parent\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 409) {",
+                  "  pm.test('already registered (ok)', () => pm.expect(pm.response.code).to.equal(409));",
+                  "} else {",
+                  "  pm.test('registered', () => pm.response.to.have.status(200));",
+                  "  const j = pm.response.json();",
+                  "  pm.environment.set('parentToken', j.token);",
+                  "  pm.environment.set('parentUid', j.user.uid);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/auth/login (parent)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{parentEmail}}\",\n  \"password\": \"{{parentPassword}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('login ok', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.environment.set('parentToken', j.token);",
+                  "pm.environment.set('parentUid', j.user.uid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/auth/register (child)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{childEmail}}\",\n  \"password\": \"{{childPassword}}\",\n  \"displayName\": \"{{childDisplayName}}\",\n  \"role\": \"child\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 409) {",
+                  "  pm.test('already registered (ok)', () => pm.expect(pm.response.code).to.equal(409));",
+                  "} else {",
+                  "  pm.test('registered', () => pm.response.to.have.status(200));",
+                  "  const j = pm.response.json();",
+                  "  pm.environment.set('childToken', j.token);",
+                  "  pm.environment.set('childUid', j.user.uid);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/auth/login (child)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{childEmail}}\",\n  \"password\": \"{{childPassword}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('login ok', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.environment.set('childToken', j.token);",
+                  "pm.environment.set('childUid', j.user.uid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/auth/register (admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/register",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\",\n  \"displayName\": \"{{adminDisplayName}}\",\n  \"role\": \"admin\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 409) {",
+                  "  pm.test('already registered (ok)', () => pm.expect(pm.response.code).to.equal(409));",
+                  "} else {",
+                  "  pm.test('registered', () => pm.response.to.have.status(200));",
+                  "  const j = pm.response.json();",
+                  "  pm.environment.set('adminToken', j.token);",
+                  "  pm.environment.set('adminUid', j.user.uid);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /api/auth/login (admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('login ok', () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.environment.set('adminToken', j.token);",
+                  "pm.environment.set('adminUid', j.user.uid);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /api/auth/me (parent token)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/auth/me"
+          }
+        },
+        {
+          "name": "PUT /api/auth/profile (parent token)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{parentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/profile",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Parent Updated\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Supervision (Parent)",
+      "item": [
+        {
+          "name": "GET /api/supervision",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/supervision"
+          }
+        },
+        {
+          "name": "POST /api/supervision (link child by email)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{parentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/supervision",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"childEmail\": \"{{childEmail}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/supervision/:childUid (unlink)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/supervision/{{childUid}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Child Settings (Parent)",
+      "item": [
+        {
+          "name": "GET /api/child-settings/:childUid",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/child-settings/{{childUid}}"
+          }
+        },
+        {
+          "name": "PUT /api/child-settings/:childUid",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{parentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/child-settings/{{childUid}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"blockedKeywords\": [\"gambling\", \"drugs\"],\n  \"blockedTopics\": []\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chats",
+      "item": [
+        {
+          "name": "GET /api/chats (parent)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/chats"
+          }
+        },
+        {
+          "name": "POST /api/chats (parent: add message)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{parentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/chats",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"{{sampleChatText}}\",\n  \"sender\": \"user\",\n  \"timestamp\": 0,\n  \"riskLevel\": \"Safe\"\n}"
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/chats (parent: clear history)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/chats"
+          }
+        },
+        {
+          "name": "GET /api/chats/child/:childUid (parent)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/chats/child/{{childUid}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Safety",
+      "item": [
+        {
+          "name": "POST /api/safety/classify (text)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{parentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/safety/classify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"{{sampleChatText}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "POST /api/safety/classify (unsafe text)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{parentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/safety/classify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"{{sampleUnsafeText}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Memory",
+      "item": [
+        {
+          "name": "GET /api/memory/status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/memory/status"
+          }
+        },
+        {
+          "name": "POST /api/memory/toggle (enable)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{parentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/memory/toggle",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "POST /api/memory/toggle (disable)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{parentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/memory/toggle",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/memory (clear)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/memory"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rules (Admin)",
+      "item": [
+        {
+          "name": "GET /api/rules",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/api/rules"
+          }
+        },
+        {
+          "name": "POST /api/rules (create)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/rules",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyword\": \"testkeyword\",\n  \"category\": \"General\",\n  \"riskLevel\": \"Moderate\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  if (j && j.id) pm.environment.set('ruleId', j.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /api/rules/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/api/rules/{{ruleId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logs",
+      "item": [
+        {
+          "name": "GET /api/logs (parent)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/logs?limit=50"
+          }
+        },
+        {
+          "name": "POST /api/logs (parent: add log)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{parentToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/logs",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"manual log event\",\n  \"riskLevel\": \"Low\",\n  \"riskCategory\": \"General\",\n  \"escalated\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "GET /api/logs/child/:childUid (parent)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/logs/child/{{childUid}}"
+          }
+        },
+        {
+          "name": "GET /api/logs (admin sees all)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": "{{baseUrl}}/api/logs?limit=50"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "POST /api/admin/retrain",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/admin/retrain"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Danger Zone",
+      "item": [
+        {
+          "name": "DELETE /api/auth/account (parent)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{parentToken}}" }],
+            "url": "{{baseUrl}}/api/auth/account"
+          }
+        }
+      ]
+    }
+  ]
+}

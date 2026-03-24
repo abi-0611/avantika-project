@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sun, Moon, Type, Bell, BellOff, Download, Trash2, User, Check, AlertTriangle } from 'lucide-react';
-import { auth, db } from '../firebase';
-import { doc, getDoc, updateDoc, deleteDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { updateProfile, deleteUser } from 'firebase/auth';
 import { motion, AnimatePresence } from 'motion/react';
+import { apiDelete, apiGet, apiPut } from '../services/apiClient';
+import * as authService from '../services/authService';
+import type { ChatMessage } from '../types';
 
 export interface UserSettings {
   darkMode: boolean;
@@ -19,14 +19,13 @@ interface Props {
 }
 
 export default function SettingsPanel({ onClose, settings, onSettingsChange }: Props) {
-  const [displayName, setDisplayName] = useState(settings.displayName || auth.currentUser?.displayName || '');
+  const storedUser = authService.getStoredUser();
+  const [displayName, setDisplayName] = useState(settings.displayName || storedUser?.displayName || '');
   const [nameStatus, setNameStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-
-  const user = auth.currentUser;
 
   const update = (patch: Partial<UserSettings>) => {
     const next = { ...settings, ...patch };
@@ -35,11 +34,13 @@ export default function SettingsPanel({ onClose, settings, onSettingsChange }: P
   };
 
   const saveName = async () => {
-    if (!user || !displayName.trim()) return;
+    if (!storedUser || !displayName.trim()) return;
     try {
-      await updateProfile(user, { displayName: displayName.trim() });
-      await updateDoc(doc(db, 'users', user.uid), { displayName: displayName.trim() });
       update({ displayName: displayName.trim() });
+      await apiPut('/api/auth/profile', { displayName: displayName.trim() });
+
+      const nextUser = { ...storedUser, displayName: displayName.trim() };
+      localStorage.setItem('shieldbot_user', JSON.stringify(nextUser));
       setNameStatus('saved');
       setTimeout(() => setNameStatus('idle'), 2000);
     } catch {
@@ -49,18 +50,15 @@ export default function SettingsPanel({ onClose, settings, onSettingsChange }: P
   };
 
   const exportChats = async () => {
-    if (!user) return;
+    if (!storedUser) return;
     setIsExporting(true);
     try {
-      const q = query(collection(db, 'chats'), where('uid', '==', user.uid));
-      const snap = await getDocs(q);
-      const msgs = snap.docs
-        .map(d => d.data())
-        .sort((a, b) => a.timestamp - b.timestamp);
+      const msgs = (await apiGet('/api/chats')) as ChatMessage[];
+      const ordered = (Array.isArray(msgs) ? msgs : []).slice().sort((a, b) => a.timestamp - b.timestamp);
 
-      const text = msgs.map(m => {
+      const text = ordered.map(m => {
         const time = new Date(m.timestamp).toLocaleString();
-        const sender = m.sender === 'user' ? (user.displayName || 'You') : 'ShieldBot';
+        const sender = m.sender === 'user' ? (storedUser.displayName || 'You') : 'ShieldBot';
         return `[${time}] ${sender}: ${m.text}`;
       }).join('\n');
 
@@ -79,29 +77,15 @@ export default function SettingsPanel({ onClose, settings, onSettingsChange }: P
   };
 
   const deleteAccount = async () => {
-    if (!user || deleteInput !== 'DELETE') return;
+    if (!storedUser || deleteInput !== 'DELETE') return;
     setIsDeleting(true);
     try {
-      // Delete all user data from Firestore
-      const batch = writeBatch(db);
-      const collections = ['chats', 'logs'];
-      for (const col of collections) {
-        const q = query(collection(db, col), where('uid', '==', user.uid));
-        const snap = await getDocs(q);
-        snap.docs.forEach(d => batch.delete(d.ref));
-      }
-      // Delete user doc
-      batch.delete(doc(db, 'users', user.uid));
-      await batch.commit();
-      // Delete Firebase Auth account
-      await deleteUser(user);
+      await apiDelete('/api/auth/account');
+      authService.logout();
+      window.location.reload();
     } catch (e: any) {
       setIsDeleting(false);
-      if (e.code === 'auth/requires-recent-login') {
-        alert('For security, please sign out and sign back in, then try deleting your account again.');
-      } else {
-        alert('Failed to delete account. Please try again.');
-      }
+      alert('Failed to delete account. Please try again.');
     }
   };
 

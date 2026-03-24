@@ -1,77 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { auth, db } from './firebase';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, User } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import React, { useState } from 'react';
 import ChatInterface from './components/ChatInterface';
 import AdminDashboard from './components/AdminDashboard';
 import ParentalDashboard from './components/ParentalDashboard';
 import { Shield, Lock, LogIn, AlertCircle, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-
-import { handleFirestoreError, OperationType } from './services/errorService';
+import { useAuth } from './hooks/useAuth';
+import type { AppRole } from './services/authService';
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, loading, login, register } = useAuth();
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isParentalOpen, setIsParentalOpen] = useState(false);
-  const [showRoleSelection, setShowRoleSelection] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        try {
-          const userRef = doc(db, 'users', currentUser.uid);
-          const userSnap = await getDoc(userRef);
-          
-          if (!userSnap.exists()) {
-            setShowRoleSelection(true);
-          } else if (!userSnap.data().role) {
-            setShowRoleSelection(true);
-          }
-        } catch (err) {
-          handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}`);
-        }
-      }
-      setUser(currentUser);
-      setLoading(false);
-    });
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [role, setRole] = useState<AppRole>('parent');
 
-    return () => unsubscribe();
-  }, []);
-
-  const handleLogin = async (intendedRole?: 'parent' | 'child') => {
+  const submit = async () => {
+    setError(null);
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const currentUser = result.user;
-
-      const userRef = doc(db, 'users', currentUser.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists() || !userSnap.data().role) {
-        await setDoc(userRef, {
-          email: currentUser.email?.toLowerCase(),
-          displayName: currentUser.displayName,
-          role: intendedRole || 'user',
-          createdAt: Date.now()
-        }, { merge: true });
-        setShowRoleSelection(false);
+      if (mode === 'login') {
+        await login(email, password);
+      } else {
+        await register(email, password, displayName, role);
       }
     } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
-  const selectRole = async (role: 'parent' | 'child' | 'user') => {
-    if (!user) return;
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, { role }, { merge: true });
-      setShowRoleSelection(false);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+      setError(err?.message || 'Something went wrong');
     }
   };
 
@@ -129,58 +86,94 @@ export default function App() {
             </motion.div>
           )}
 
-          <div className="space-y-4">
-            <button 
-              onClick={() => handleLogin('parent')}
-              className="w-full flex items-center justify-center gap-4 bg-white text-luxury-black py-5 rounded-full font-semibold hover:bg-stone-200 transition-all shadow-2xl shadow-white/5 group"
+          <div className="flex items-center justify-center gap-2 mb-8">
+            <button
+              onClick={() => setMode('login')}
+              className={
+                mode === 'login'
+                  ? 'px-6 py-2 rounded-full bg-white text-luxury-black text-sm font-semibold'
+                  : 'px-6 py-2 rounded-full bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 transition-all'
+              }
             >
-              <Users className="w-5 h-5" />
-              Parent Portal
+              <LogIn className="w-4 h-4 inline-block mr-2" />
+              Login
             </button>
-            <button 
-              onClick={() => handleLogin('child')}
-              className="w-full flex items-center justify-center gap-4 bg-white/5 border border-white/10 text-white py-5 rounded-full font-semibold hover:bg-white/10 transition-all group"
+            <button
+              onClick={() => setMode('register')}
+              className={
+                mode === 'register'
+                  ? 'px-6 py-2 rounded-full bg-white text-luxury-black text-sm font-semibold'
+                  : 'px-6 py-2 rounded-full bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 transition-all'
+              }
             >
-              <Shield className="w-5 h-5" />
-              Child Sanctuary
+              <Users className="w-4 h-4 inline-block mr-2" />
+              Register
+            </button>
+          </div>
+
+          <div className="space-y-4 text-left">
+            <div className="space-y-2">
+              <label className="luxury-label">Email</label>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+                className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/10"
+                placeholder="you@example.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="luxury-label">Password</label>
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                type="password"
+                className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/10"
+                placeholder="••••••••"
+              />
+            </div>
+
+            {mode === 'register' && (
+              <>
+                <div className="space-y-2">
+                  <label className="luxury-label">Display Name</label>
+                  <input
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    type="text"
+                    className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 outline-none focus:ring-2 focus:ring-white/10"
+                    placeholder="Your name"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="luxury-label">Role</label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as AppRole)}
+                    className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white outline-none focus:ring-2 focus:ring-white/10"
+                  >
+                    <option value="parent">Parent</option>
+                    <option value="child">Child</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            <button
+              disabled={loading}
+              onClick={submit}
+              className="w-full flex items-center justify-center gap-4 bg-white text-luxury-black py-5 rounded-full font-semibold hover:bg-stone-200 transition-all shadow-2xl shadow-white/5 disabled:opacity-60"
+            >
+              {mode === 'login' ? <LogIn className="w-5 h-5" /> : <Shield className="w-5 h-5" />}
+              {mode === 'login' ? 'Login' : 'Create Account'}
             </button>
           </div>
           
           <div className="mt-12 flex items-center justify-center gap-3 text-white/20 text-[10px] font-medium uppercase tracking-[0.3em]">
             <Lock className="w-3 h-3" />
             <span>End-to-End Encrypted</span>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (showRoleSelection) {
-    return (
-      <div className="h-screen bg-luxury-black flex items-center justify-center p-6 font-sans">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md text-center"
-        >
-          <h2 className="text-3xl font-light text-white mb-8">Choose Your Path</h2>
-          <div className="grid grid-cols-1 gap-6">
-            <button 
-              onClick={() => selectRole('parent')}
-              className="p-8 glass-card rounded-3xl hover:bg-white/10 transition-all group text-left"
-            >
-              <Users className="w-8 h-8 text-indigo-400 mb-4" />
-              <h3 className="text-xl font-medium text-white mb-2">I am a Parent</h3>
-              <p className="text-sm text-white/40">Monitor and protect your child's digital experience.</p>
-            </button>
-            <button 
-              onClick={() => selectRole('child')}
-              className="p-8 glass-card rounded-3xl hover:bg-white/10 transition-all group text-left"
-            >
-              <Shield className="w-8 h-8 text-emerald-400 mb-4" />
-              <h3 className="text-xl font-medium text-white mb-2">I am a Child</h3>
-              <p className="text-sm text-white/40">Safe, guided exploration with AI companionship.</p>
-            </button>
           </div>
         </motion.div>
       </div>

@@ -1,7 +1,7 @@
 export type RiskLevel = 'Safe' | 'Low' | 'Moderate' | 'High';
 
 export interface ChatMessage {
-  id?: string;
+  id?: string | number;
   uid: string;
   text: string;
   sender: 'user' | 'bot';
@@ -12,14 +12,14 @@ export interface ChatMessage {
 }
 
 export interface SafetyRule {
-  id?: string;
+  id?: string | number;
   keyword: string;
   category: string;
   riskLevel: RiskLevel;
 }
 
 export interface SafetyLog {
-  id?: string;
+  id?: string | number;
   uid: string;
   timestamp: number;
   text: string;
@@ -29,7 +29,7 @@ export interface SafetyLog {
 }
 
 export interface SupervisionLink {
-  id?: string;
+  id?: string | number;
   guardianUid: string;
   childUid: string;
   childEmail: string;

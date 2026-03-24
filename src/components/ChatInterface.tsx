@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, AlertTriangle, Shield, Info, LogOut, Settings, Image as ImageIcon, X, Users, Trash2 } from 'lucide-react';
+import { Send, Mic, AlertTriangle, Shield, Info, LogOut, Settings, Image as ImageIcon, X, Users, Trash2, BrainCircuit } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { auth, db } from '../firebase';
-import { collection, addDoc, query, where, orderBy, onSnapshot, writeBatch, getDocs } from 'firebase/firestore';
-import { classifyRisk, logSafetyEvent, classifyImageRisk } from '../services/safetyService';
 import { ChatMessage, RiskLevel } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import SettingsPanel, { UserSettings } from './SettingsPanel';
+import Toast from './Toast';
+import { apiDelete, apiGet, apiPost } from '../services/apiClient';
+import * as authService from '../services/authService';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -27,8 +27,6 @@ function loadSettings(): UserSettings {
   } catch { return defaultSettings; }
 }
 
-import { handleFirestoreError, OperationType } from '../services/errorService';
-
 export default function ChatInterface({ onOpenAdmin, onOpenParental }: { onOpenAdmin: () => void, onOpenParental: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -37,10 +35,13 @@ export default function ChatInterface({ onOpenAdmin, onOpenParental }: { onOpenA
   const [userSettings, setUserSettings] = useState<UserSettings>(loadSettings());
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [memoryOn, setMemoryOn] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const user = auth.currentUser;
+  const user = authService.getStoredUser();
 
   // Apply dark/light mode to body
   useEffect(() => {
@@ -48,46 +49,37 @@ export default function ChatInterface({ onOpenAdmin, onOpenParental }: { onOpenA
   }, [userSettings.darkMode]);
 
   useEffect(() => {
-    if (!user) return;
-
-    // Try with orderBy first, fallback to simple query if index is missing
-    let q = query(
-      collection(db, 'chats'),
-      where('uid', '==', user.uid),
-      orderBy('timestamp', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage));
-      setMessages(msgs);
-    }, (error) => {
-      if (error.code === 'failed-precondition') {
-        // Fallback: fetch without orderBy and sort in memory
-        const fallbackQ = query(collection(db, 'chats'), where('uid', '==', user.uid));
-        onSnapshot(fallbackQ, (snapshot) => {
-          const msgs = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage))
-            .sort((a, b) => a.timestamp - b.timestamp);
-          setMessages(msgs);
-        });
-      } else {
-        handleFirestoreError(error, OperationType.LIST, 'chats');
+    const load = async () => {
+      try {
+        const data = await apiGet('/api/chats');
+        setMessages(data);
+      } catch {
+        // ignore; apiClient will handle 401
       }
-    });
+    };
 
-    return () => unsubscribe();
+    load();
+    const interval = setInterval(load, 3000);
+    return () => clearInterval(interval);
   }, [user]);
 
+  useEffect(() => {
+    apiGet('/api/memory/status')
+      .then((d) => setMemoryOn(Boolean(d.enabled)))
+      .catch(() => {});
+  }, []);
+
   const clearHistory = async () => {
-    if (!user || !window.confirm("Are you sure you want to clear your chat history? This cannot be undone.")) return;
+    if (!window.confirm("Are you sure you want to clear your chat history? This cannot be undone.")) return;
     try {
-      const q = query(collection(db, 'chats'), where('uid', '==', user.uid));
-      const snapshot = await getDocs(q);
-      const batch = writeBatch(db);
-      snapshot.docs.forEach(doc => batch.delete(doc.ref));
-      await batch.commit();
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, 'chats (clear history)');
+      await apiDelete('/api/chats');
+      setToastType('success');
+      setToastMessage('Chat history cleared');
+      setTimeout(() => setToastMessage(''), 3100);
+    } catch {
+      setToastType('error');
+      setToastMessage('Failed to clear chat history');
+      setTimeout(() => setToastMessage(''), 3100);
     }
   };
 
@@ -108,49 +100,54 @@ export default function ChatInterface({ onOpenAdmin, onOpenParental }: { onOpenA
 
   const handleSend = async (text: string, imageBase64?: string) => {
     if (!text.trim() && !imageBase64) return;
-    if (!user) return;
 
     setIsLoading(true);
-    const userMsg: ChatMessage = {
-      uid: user.uid,
-      text: imageBase64 ? `${text} [Image Attached]` : text,
-      sender: 'user',
-      timestamp: Date.now(),
-      riskLevel: 'Safe',
-    };
 
     try {
-      let safetyResult;
-      if (imageBase64) {
-        safetyResult = await classifyImageRisk(imageBase64, user.uid, text);
-      } else {
-        safetyResult = await classifyRisk(text, user.uid);
-      }
+      const result = await apiPost('/api/safety/classify', {
+        text,
+        ...(imageBase64 ? { imageBase64 } : {}),
+      });
 
-      userMsg.riskLevel = safetyResult.riskLevel;
-      userMsg.riskCategory = safetyResult.category;
-      userMsg.explanation = safetyResult.explanation;
+      await apiPost('/api/chats', {
+        text: imageBase64 ? `${text} [Image Attached]` : text,
+        sender: 'user',
+        riskLevel: result.riskLevel,
+        riskCategory: result.category,
+        explanation: result.explanation,
+        timestamp: Date.now(),
+      });
 
-      await addDoc(collection(db, 'chats'), userMsg).catch(err => handleFirestoreError(err, OperationType.CREATE, 'chats'));
-      await logSafetyEvent(user.uid, userMsg.text, safetyResult);
-
-      const botResponseText = safetyResult.suggestedResponse;
-
-      const botMsg: ChatMessage = {
-        uid: user.uid,
-        text: botResponseText,
+      await apiPost('/api/chats', {
+        text: result.suggestedResponse,
         sender: 'bot',
-        timestamp: Date.now() + 100,
         riskLevel: 'Safe',
-      };
-
-      await addDoc(collection(db, 'chats'), botMsg).catch(err => handleFirestoreError(err, OperationType.CREATE, 'chats'));
+        timestamp: Date.now() + 100,
+      });
     } catch (error) {
       console.error("Error sending message:", error);
+      setToastType('error');
+      setToastMessage('Message failed to send');
+      setTimeout(() => setToastMessage(''), 3100);
     } finally {
       setIsLoading(false);
       setInput('');
       setSelectedImage(null);
+    }
+  };
+
+  const toggleMemory = async () => {
+    try {
+      const next = !memoryOn;
+      await apiPost('/api/memory/toggle', { enabled: next });
+      setMemoryOn(next);
+      setToastType('success');
+      setToastMessage(next ? 'Memory enabled' : 'Memory cleared');
+      setTimeout(() => setToastMessage(''), 3100);
+    } catch {
+      setToastType('error');
+      setToastMessage('Failed to toggle memory');
+      setTimeout(() => setToastMessage(''), 3100);
     }
   };
 
@@ -191,10 +188,23 @@ export default function ChatInterface({ onOpenAdmin, onOpenParental }: { onOpenA
           >
             <Users className="w-5 h-5" />
           </button>
-          <button 
-            onClick={() => setIsSettingsOpen(true)} 
+          <button
+            onClick={toggleMemory}
             className="p-2 hover:bg-white/10 rounded-full transition-all text-white/60 hover:text-white"
-            title="Admin Panel"
+            title={`Memory ${memoryOn ? 'ON' : 'OFF'}`}
+          >
+            <div className="flex items-center gap-2">
+              <BrainCircuit className="w-5 h-5" />
+              <span className={cn('w-2 h-2 rounded-full', memoryOn ? 'bg-emerald-400' : 'bg-stone-500')} />
+            </div>
+          </button>
+          <button 
+            onClick={() => {
+              if (user?.role === 'admin') onOpenAdmin();
+              else setIsSettingsOpen(true);
+            }} 
+            className="p-2 hover:bg-white/10 rounded-full transition-all text-white/60 hover:text-white"
+            title={user?.role === 'admin' ? 'Admin Dashboard' : 'Settings'}
           >
             <Settings className="w-5 h-5" />
           </button>
@@ -207,7 +217,10 @@ export default function ChatInterface({ onOpenAdmin, onOpenParental }: { onOpenA
           </button>
           <div className="w-px h-5 bg-white/10 mx-1" />
           <button 
-            onClick={() => auth.signOut()} 
+            onClick={() => {
+              authService.logout();
+              window.location.reload();
+            }} 
             className="p-2 hover:bg-white/10 rounded-full transition-all text-white/60 hover:text-white"
             title="Logout"
           >
@@ -350,6 +363,8 @@ export default function ChatInterface({ onOpenAdmin, onOpenParental }: { onOpenA
           />
         )}
       </AnimatePresence>
+
+      <Toast message={toastMessage} type={toastType} />
     </div>
   );
 }

@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Users, UserPlus, Shield, Eye, AlertTriangle, X, Plus, Trash2, ChevronRight, MessageSquare } from 'lucide-react';
-import { db, auth } from '../firebase';
-import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, setDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { SupervisionLink, ChildSettings, ChatMessage, SafetyLog } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { handleFirestoreError, OperationType } from '../services/errorService';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { apiGet, apiPost, apiPut } from '../services/apiClient';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -22,76 +20,57 @@ export default function ParentalDashboard({ onClose }: { onClose: () => void }) 
   const [newKeyword, setNewKeyword] = useState('');
   const [isLinking, setIsLinking] = useState(false);
 
-  const user = auth.currentUser;
-
   useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, 'supervision'), where('guardianUid', '==', user.uid));
-    const unsub = onSnapshot(q, (snapshot) => {
-      setLinks(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SupervisionLink)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'supervision'));
-    return () => unsub();
-  }, [user]);
+    const load = async () => {
+      try {
+        const data = await apiGet('/api/supervision');
+        setLinks(data);
+      } catch {
+        // ignore; apiClient handles 401
+      }
+    };
+
+    load();
+    const interval = setInterval(load, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!selectedChild) return;
 
-    // Fetch child settings
-    const settingsUnsub = onSnapshot(doc(db, 'childSettings', selectedChild), (doc) => {
-      if (doc.exists()) {
-        setChildSettings(doc.data() as ChildSettings);
-      } else {
-        setChildSettings({ childUid: selectedChild, blockedKeywords: [], blockedTopics: [] });
+    const load = async () => {
+      try {
+        const [settings, chats, logs] = await Promise.all([
+          apiGet(`/api/child-settings/${encodeURIComponent(selectedChild)}`),
+          apiGet(`/api/chats/child/${encodeURIComponent(selectedChild)}`),
+          apiGet(`/api/logs/child/${encodeURIComponent(selectedChild)}`),
+        ]);
+        setChildSettings(settings);
+        setChildChats((Array.isArray(chats) ? chats : []).slice().sort((a, b) => b.timestamp - a.timestamp));
+        setChildLogs((Array.isArray(logs) ? logs : []).slice().sort((a, b) => b.timestamp - a.timestamp));
+      } catch {
+        // ignore
       }
-    }, (err) => handleFirestoreError(err, OperationType.GET, `childSettings/${selectedChild}`));
-
-    // Fetch child chats
-    const chatsQuery = query(collection(db, 'chats'), where('uid', '==', selectedChild));
-    const chatsUnsub = onSnapshot(chatsQuery, (snapshot) => {
-      setChildChats(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage)).sort((a, b) => b.timestamp - a.timestamp));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, `chats (child: ${selectedChild})`));
-
-    // Fetch child logs
-    const logsQuery = query(collection(db, 'logs'), where('uid', '==', selectedChild));
-    const logsUnsub = onSnapshot(logsQuery, (snapshot) => {
-      setChildLogs(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SafetyLog)).sort((a, b) => b.timestamp - a.timestamp));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, `logs (child: ${selectedChild})`));
-
-    return () => {
-      settingsUnsub();
-      chatsUnsub();
-      logsUnsub();
     };
+
+    load();
+    const interval = setInterval(load, 3000);
+    return () => clearInterval(interval);
   }, [selectedChild]);
 
   const linkChild = async () => {
-    if (!newChildEmail || !user) return;
+    if (!newChildEmail) return;
     setIsLinking(true);
     
     try {
-      // Find child by email
-      const usersQuery = query(collection(db, 'users'), where('email', '==', newChildEmail.trim().toLowerCase()));
-      const userSnap = await getDocs(usersQuery);
-      
-      if (userSnap.empty) {
-        alert("Child account not found. Please ensure they have logged in once and their email matches exactly.");
-        return;
-      }
-
-      const childUid = userSnap.docs[0].id;
-      const linkId = `${user.uid}_${childUid}`;
-      
-      await setDoc(doc(db, 'supervision', linkId), {
-        guardianUid: user.uid,
-        childUid: childUid,
+      await apiPost('/api/supervision', {
         childEmail: newChildEmail.trim().toLowerCase(),
-        status: 'active'
       });
-
       setNewChildEmail('');
       alert("Account linked successfully!");
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'supervision');
+      console.error(err);
+      alert('Linking failed');
     } finally {
       setIsLinking(false);
     }
@@ -101,14 +80,16 @@ export default function ParentalDashboard({ onClose }: { onClose: () => void }) 
     if (!newKeyword || !selectedChild) return;
     try {
       const updatedKeywords = [...(childSettings?.blockedKeywords || []), newKeyword.trim()];
-      await setDoc(doc(db, 'childSettings', selectedChild), {
+      const nextSettings = {
         childUid: selectedChild,
         blockedKeywords: updatedKeywords,
-        blockedTopics: childSettings?.blockedTopics || []
-      });
+        blockedTopics: childSettings?.blockedTopics || [],
+      };
+      setChildSettings(nextSettings);
+      await apiPut(`/api/child-settings/${encodeURIComponent(selectedChild)}`, nextSettings);
       setNewKeyword('');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `childSettings/${selectedChild}`);
+      console.error(err);
     }
   };
 
@@ -116,11 +97,15 @@ export default function ParentalDashboard({ onClose }: { onClose: () => void }) 
     if (!selectedChild) return;
     try {
       const updatedKeywords = (childSettings?.blockedKeywords || []).filter(k => k !== keyword);
-      await updateDoc(doc(db, 'childSettings', selectedChild), {
-        blockedKeywords: updatedKeywords
-      });
+      const nextSettings = {
+        childUid: selectedChild,
+        blockedKeywords: updatedKeywords,
+        blockedTopics: childSettings?.blockedTopics || [],
+      };
+      setChildSettings(nextSettings);
+      await apiPut(`/api/child-settings/${encodeURIComponent(selectedChild)}`, nextSettings);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `childSettings/${selectedChild}`);
+      console.error(err);
     }
   };
 
